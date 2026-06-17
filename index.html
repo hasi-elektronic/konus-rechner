@@ -561,6 +561,17 @@
           </div>
           <button class="btn-export btn-print" onclick="printInNewWindow()">Drucken</button>
         </div>
+
+        <!-- Sickinger Kalkulation -->
+        <div class="export-card" id="kalk-card" style="border-color:#1B5E9E;background:rgba(27,94,158,.05);">
+          <div class="export-icon">📊</div>
+          <div class="export-info">
+            <strong>An Kalkulation senden</strong>
+            <span>Konus-Abwicklung direkt in Sickinger Kalkulationssystem übernehmen</span>
+          </div>
+          <button class="btn-export btn-dxf" id="btnKalk" onclick="sendToKalkulation()">↗ Kalkulation</button>
+        </div>
+        <div id="kalk-msg" style="display:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;margin-top:-6px;"></div>
       </div>
     </div>
 
@@ -2027,6 +2038,65 @@ function buildFertRows() {
 }
 function updateKalkGesamt() {
   updateKalkulation();
+}
+
+// ── An Sickinger Kalkulation senden ──────────────────────────
+function sendToKalkulation() {
+  var btn = document.getElementById('btnKalk');
+  var msg = document.getElementById('kalk-msg');
+  if (!lastResult) { showMsg('⚠ Bitte zuerst berechnen.', '#c02828'); return; }
+  btn.disabled = true; btn.textContent = 'Wird gesendet…';
+  function showMsg(t, bg) {
+    msg.style.display = 'block';
+    msg.style.background = bg+'22';
+    msg.style.color = bg;
+    msg.textContent = t;
+    btn.disabled = false;
+    btn.textContent = '↗ Kalkulation';
+  }
+  var r = lastResult;
+  var werkstoff = (document.getElementById('selWerkstoff')||{}).value || '';
+  var menge = parseInt((document.getElementById('kalMenge')||{}).value) || 1;
+  var title = 'Konus Ø' + r.D + '→Ø' + (r.d_eingabe||0) + ' H' + (r.H||r.s||0) + 'mm';
+  // DXF erzeugen
+  var dxfStr = '';
+  try { var tmpR = lastResult; exportDXF && (dxfStr = ''); } catch(e) {}
+  var body = {
+    token: 'cad_883064945860458e135defe1dd4c042976e5',
+    calc_type: 'drueckteile',
+    title: title,
+    batchQty: menge,
+    positions: [{
+      label: 'Konus-Abwicklung',
+      material: werkstoff,
+      shape: 'eckig',
+      width: Math.round(r.tafelLaenge || r.laenge || r.D || 0),
+      height: Math.round(r.tafelBreite || r.breite || r.d_eingabe || 0),
+      thickness: r.T || 0,
+      qty: menge,
+      pricePerKg: 0
+    }]
+  };
+  var popup = window.open('', '_blank');
+  fetch('https://sickinger-kalkulationssystem.pages.dev/api/import/cad', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(function(res) {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }).then(function(data) {
+    if (data && data.url) {
+      showMsg('✓ Kalkulation #' + data.id + ' geöffnet', '#1a7a1a');
+      if (popup) { popup.location.href = data.url; } else { window.open(data.url, '_blank'); }
+    } else {
+      showMsg('✗ Unerwartete Antwort', '#c02828');
+      if (popup) popup.close();
+    }
+  }).catch(function(e) {
+    showMsg('✗ Fehler: ' + e.message, '#c02828');
+    if (popup) popup.close();
+  });
 }
 
 </script>
